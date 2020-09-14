@@ -1,4 +1,4 @@
-module Snake(Segment(..), SnakeObject, initialSnake, moveForward, Direction(..), changeDir, eat) where
+module Snake(Segment(..),SegmentType(..), SnakeObject, initialSnake, moveForward, Direction(..), changeDir, grow) where
 import Control.Monad.State
 
 
@@ -6,42 +6,31 @@ data Direction = U | D | R | L deriving Eq
 
 type SnakeObject = ([Segment], Direction)
 
-data Segment = Head Float Float | Tail Float Float | Tip Float Float 
+data SegmentType = Head | Tail | Tip
 
-updateX :: Float -> Segment -> Segment
-updateX dx (Tail x y) = Tail (dx + x) y
-updateX dx (Head x y) = Head (dx + x) y
-updateX dx (Tip x y) = Tip (dx + x) y
+data Segment = Seg SegmentType (Float,  Float) 
 
-updateY :: Float -> Segment -> Segment
-updateY dy (Tail x y) = Tail x (dy + y)
-updateY dy (Head x y) = Head x (dy + y)
-updateY dy (Tip x y) = Tip x (dy + y)
 
-mv :: (Float -> Segment -> Segment) -> Float -> Segment -> State (Float, Float) Segment
-mv f d s@(Head x y)= do
-    put (x, y)
-    return (f d s)
-mv _ _ (Tail x y) = do
+moveForward :: Float -> SnakeObject -> SnakeObject
+moveForward d snake@(Seg _ (x, y) :_, R) = 
+    fst $ runState (move snake) (x+d, y)
+moveForward d snake@(Seg _ (x, y) :_, L) = 
+    fst $ runState (move snake) (x-d, y)
+moveForward d snake@(Seg _ (x, y) :_, U) = 
+    fst $ runState (move snake) (x, y+d)
+moveForward d snake@(Seg _ (x, y) :_, D) = 
+    fst $ runState (move snake) (x, y-d)
+    
+
+
+move :: SnakeObject -> State (Float, Float) SnakeObject
+move ([], dir) = return ([], dir)
+move ((Seg typ (x, y)):t, dir) = do
     (x', y') <- get
     put (x, y)
-    return (Tail x' y')
-mv _ _ (Tip x y) = do
-    (x', y') <- get
-    put (x, y)
-    return (Tip x' y')
+    (rest, _) <- move (t, dir)
+    return ((Seg typ (x', y')):rest, dir)
 
-mapState' :: (Float, Float) -> [State (Float, Float) Segment] -> [Segment] 
-mapState' _ []     = [] 
-mapState' xy (h:t) = let (v, s) = runState h xy
-                    in v : mapState' s t
-
-
-moveForward :: SnakeObject -> Float -> SnakeObject
-moveForward (snake, R) d = (mapState' (0,0) $ map (mv updateX d) snake, R)
-moveForward (snake, L) d = (mapState' (0,0) $ map (mv updateX (-d)) snake, L)
-moveForward (snake, U) d = (mapState' (0,0) $ map (mv updateY d) snake, U)
-moveForward (snake, D) d = (mapState' (0,0) $ map (mv updateY (-d)) snake, D)
 
 changeDir :: SnakeObject -> Direction -> SnakeObject
 changeDir s@(snake, D) U = s
@@ -52,13 +41,13 @@ changeDir s@(snake, d1) d2
     | d1 == d2  = s
     | otherwise = (snake, d2)
 
-eat :: (Float, Float) -> SnakeObject -> SnakeObject
-eat (x, y) ((Head x' y'):t, d) = 
-    let h' = Head x y
-        h''= Tail x' y'
-    in    (h':h'':t, d)
-eat _ s = error "Snake wrongly formatted"
+
+
+grow :: SnakeObject -> SnakeObject 
+grow ((Seg Tip cs):ss, dir) = (Seg Tail cs : Seg Tip cs : ss, dir)
+grow (h:t, dir)             = let (s, _) = grow (t, dir)
+                              in (h:s, dir)  
     
 
 initialSnake :: SnakeObject
-initialSnake = ([Head 0 0, Tail (-20) 0, Tip (-40) 0], R)
+initialSnake = ([Seg Head (0, 0), Seg Tail ((-20), 0), Seg Tip ((-40), 0)], R)

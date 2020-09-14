@@ -4,17 +4,18 @@ import Graphics.Gloss.Interface.IO.Interact
 import Snake
 
 data Status = Won | Lost | Playing 
-
+type Coordinates = (Float, Float)
 data GameState = GameState {
         snake :: SnakeObject -- ^ snake status
     ,   points :: Int  -- ^ number of points
     ,   status :: Status -- ^ game status won, lost, playing
     ,   toNextBug :: Int -- ^ frames to next bug
-    ,   bugCoord  :: (Float, Float)  -- ^ coordinates of a bug
-    }
+    ,   bug  :: Coordinates  -- ^ coordinates of a bug
+    ,   eatenBugs :: [Coordinates]
+    } 
 
 fps :: Int
-fps = 60
+fps = 20
 
 window :: Display
 window = FullScreen
@@ -28,39 +29,39 @@ pixel = 20
 snakeColor :: Color
 snakeColor = dark red
 
+timeToNextBug :: Int
+timeToNextBug = fps
+
 initialState :: GameState
 initialState = GameState {
         snake  = initialSnake
     ,   points = 0
     ,   status = Playing
-    ,   toNextBug = 1000
-    ,   bugCoord  =  (-100, 200)
+    ,   toNextBug = timeToNextBug
+    ,   bug  =  (-100, 0)
+    ,   eatenBugs = []
     }
 
 renderSegment :: Segment -> Picture
-renderSegment (Head x y) = pictures 
+renderSegment (Seg Head (x, y)) = pictures 
     [ translate x y $ color snakeColor $ rectangleSolid pixel pixel
     ]
-renderSegment (Tail x y) = pictures 
+renderSegment (Seg Tail (x, y)) = pictures 
     [ translate x y $ color (light snakeColor) $ rectangleSolid pixel pixel
     ]
-renderSegment (Tip x y) = pictures 
+renderSegment (Seg Tip (x, y)) = pictures 
     [ translate x y $ color (light $ light snakeColor) $ rectangleSolid pixel pixel
     ]
 
-bugEaten :: GameState -> Bool
-bugEaten st = 
-    let (Head x y) = head $ fst (snake st)
-        (bx, by)   = bugCoord st
-    in bx == x && by == y
-
 render :: GameState -> Picture
-render st = pictures (bug : s)
+render st = pictures (time : points : bug' : s)
     where
         (ss, _)  = snake st
         s        = map renderSegment ss
-        (bx, by) = bugCoord st
-        bug      = translate bx by $ color green $ circleSolid pixel
+        (bx, by) = bug st
+        bug'     = translate bx by $ color green $ circleSolid (pixel / 2)
+        time     = scale 0.2 0.2 $ translate 4500 2500 $ color yellow $ (text . show . toNextBug) st
+        points   = scale 0.25 0.25 $ translate (-3700) 2000 $ color red $ text $ show $ length $ fst $ snake st
 
 handleEvent :: Event -> GameState -> GameState
 handleEvent (EventKey (SpecialKey KeyUp) Down _ _) st = st { snake = changeDir (snake st) U }
@@ -69,20 +70,43 @@ handleEvent (EventKey (SpecialKey KeyRight) Down _ _) st = st { snake = changeDi
 handleEvent (EventKey (SpecialKey KeyLeft) Down _ _) st = st { snake = changeDir (snake st) L }
 handleEvent _ st = st
 
+bugEaten :: Coordinates -> SnakeObject -> Bool
+bugEaten c1 snake@(Seg _ c2:_, _) = c1 == c2
+
+onTip :: SnakeObject -> [Coordinates] -> Bool
+onTip _ []         = False
+onTip snake (c:cs) = 
+    let (Seg _ c') = last (fst snake)
+    in c' == c
+
+-- headOnTopWall :: SnakeObject -> Bool
+-- headOnTopWall (Seg _ (x, y):_, U) = 
+-- headOnTopWall _ = False
+
+-- headOnBotWall :: SnakeObject -> Bool
+-- headOnLeftWall :: SnakeObject -> Bool
+-- headOnRightWall :: SnakeObject -> Bool
+
 update :: Float -> GameState -> GameState
-update _ st@(GameState _ _ Won _ _) = st 
-update _ st@(GameState _ _ Lost _ _) = st 
-update _ st = st { snake     = moveForward  (snake st) (pixel / 3)
+update _ st@(GameState _ _ Won _ _ _) = st 
+update _ st@(GameState _ _ Lost _ _ _) = st 
+update _ st = st { snake     = snake'
                  , toNextBug = time
-                 , bugCoord  = b 
+                 , bug       = bug' 
+                 , eatenBugs = eatenBugs'
                  }
         where
-            snake' = moveForward  (snake st) (pixel / 3)
-            eaten = bugEaten st {snake = snake'}
-            snake''   = if eaten then eat (bugCoord st) snake' else snake'
-            (time, b) = if toNextBug st - 1 == 0 || eaten
-                        then (9000, (500, 500))
-                        else (toNextBug st - 1, bugCoord st)
+            -- | bug got thru entire snake?
+            shouldGrow = onTip (snake st) $ eatenBugs st
+            snake' = moveForward pixel $ (if shouldGrow then grow  else id) $ snake st
+            eatenBugs'' = (if shouldGrow then tail else id) $ eatenBugs st
+
+            -- | new bug was eaten?
+            eaten  = bugEaten (bug st) (snake st)
+            eatenBugs' = if eaten then eatenBugs'' ++ [bug st] else eatenBugs''
+            (time, bug') = if toNextBug st == 0 || eaten
+                           then (timeToNextBug, (fromIntegral $ toNextBug st, 500))
+                           else (toNextBug st - 1, bug st)
 
 
 main :: IO ()
