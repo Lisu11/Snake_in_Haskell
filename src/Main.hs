@@ -5,13 +5,13 @@ import Snake
 import System.Random
 import Control.Monad.State
 
-data Status = Won | Lost | Playing 
+data Status = Menu Float | Lost | Playing 
 type Coordinates = (Float, Float)
 data GameState = GameState {
-        status      :: Status -- ^ game status won, lost, playing
-    ,   snake       :: SnakeObject -- ^ snake status
-    ,   points      :: Int  -- ^ number of points
-    ,   toNextBug   :: Int -- ^ frames to next bug
+        status      :: Status       -- ^ game status won, lost, playing
+    ,   snake       :: SnakeObject  -- ^ snake status
+    ,   points      :: Int          -- ^ number of points
+    ,   toNextBug   :: Int          -- ^ frames to next bug
     ,   bug         :: Coordinates  -- ^ coordinates of a bug
     ,   eatenBugs   :: [Coordinates]
     } 
@@ -44,7 +44,7 @@ initialState :: GameState
 initialState = GameState {
         snake       = initialSnake
     ,   points      = 0
-    ,   status      = Playing
+    ,   status      = Menu 0
     ,   toNextBug   = timeToNextBug
     ,   bug         = (-100, 0)
     ,   eatenBugs   = []
@@ -62,12 +62,20 @@ renderSegment (Seg Tip (x, y)) = pictures
     ]
 
 render :: GameState -> Picture
-render st@(GameState Lost _ _ _ _ _) = pictures (lostMsg : score : s)
+render st@(GameState (Menu item) _ _ _ _ _) = pictures [title, selectedItem, play, exit, author]
+    where
+        title        = translate (-800) 50 $ color (dark yellow) $ text "Snake Game"
+        selectedItem = translate (-140) (-40 - (60 * item)) $ color red $ rectangleWire 200 60
+        play         = scale 0.4 0.4 $ translate (-500) (-150) $ color red $ text $ "PLAY" 
+        exit         = scale 0.4 0.4 $ translate (-500) (-300) $ color red $ text $ "EXIT" 
+        author       = scale 0.2 0.2 $ translate (-500) (-2200) $ color green $ text $ "Author: Lisu"
+render st@(GameState Lost _ _ _ _ _) = pictures (lostMsg : score : bindings : s)
     where 
         s       = map renderSegment (fst $ snake st)
         lostMsg = translate (-300) 50 $ color (light red) $ text "You Lost"
         score   = scale 0.4 0.4 $ translate (-500) (-100) $ color red $ text $ "Final Score: " ++ points
         points  = show $ ((snakeLen $ snake st) - (snakeLen $ initialSnake))
+        bindings= scale 0.4 0.4 $ translate (-1300) (-400) $ color (dark $ dark red) $ text $ "Press ENTER to play again or ESC to exit"
 render st = pictures (time : points : bug' : s)
     where
         (ss, _)  = snake st
@@ -81,10 +89,22 @@ render st = pictures (time : points : bug' : s)
          
 
 handleEvent :: Event -> GameState -> GameState
-handleEvent (EventKey (SpecialKey KeyUp) Down _ _) st = st { snake = changeDir (snake st) U }
-handleEvent (EventKey (SpecialKey KeyDown) Down _ _) st = st { snake = changeDir (snake st) D }
-handleEvent (EventKey (SpecialKey KeyRight) Down _ _) st = st { snake = changeDir (snake st) R }
-handleEvent (EventKey (SpecialKey KeyLeft) Down _ _) st = st { snake = changeDir (snake st) L }
+handleEvent (EventKey (SpecialKey KeyUp) Down _ _) st@(GameState (Menu i) _ _ _ _ _) = 
+    st { status = Menu $ fromIntegral (mod (floor i + 1) 2) }
+handleEvent (EventKey (SpecialKey KeyDown) Down _ _) st@(GameState (Menu i) _ _ _ _ _) = 
+    st { status = Menu $ fromIntegral (mod (floor i + 1) 2) }
+handleEvent (EventKey (SpecialKey KeyEnter) Down _ _) st@(GameState (Menu i) _ _ _ _ _) = 
+    if i == 0 then st {status = Playing} else error "Exit app"
+handleEvent (EventKey (SpecialKey KeyEnter) Down _ _) st@(GameState Lost _ _ _ _ _) = 
+    initialState { status = Playing }  
+handleEvent (EventKey (SpecialKey KeyUp) Down _ _) st = 
+    st { snake = changeDir (snake st) U }
+handleEvent (EventKey (SpecialKey KeyDown) Down _ _) st = 
+    st { snake = changeDir (snake st) D }
+handleEvent (EventKey (SpecialKey KeyRight) Down _ _) st = 
+    st { snake = changeDir (snake st) R }
+handleEvent (EventKey (SpecialKey KeyLeft) Down _ _) st = 
+    st { snake = changeDir (snake st) L }
 handleEvent _ st = st
 
 bugEaten :: Coordinates -> SnakeObject -> Bool
@@ -128,7 +148,7 @@ moveThruWallIfNesesery snake
     | otherwise             = moveForward pixel snake
 
 update :: Float -> GameState -> GameState
-update _ st@(GameState Won _ _ _ _ _) = st 
+update _ st@(GameState (Menu _) _ _ _ _ _) = st 
 update _ st@(GameState Lost _ _ _ _ _) = st 
 update _ st = st { snake     = snake'
                  , toNextBug = time
