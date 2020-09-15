@@ -8,9 +8,9 @@ import Control.Monad.State
 data Status = Won | Lost | Playing 
 type Coordinates = (Float, Float)
 data GameState = GameState {
-        snake       :: SnakeObject -- ^ snake status
+        status      :: Status -- ^ game status won, lost, playing
+    ,   snake       :: SnakeObject -- ^ snake status
     ,   points      :: Int  -- ^ number of points
-    ,   status      :: Status -- ^ game status won, lost, playing
     ,   toNextBug   :: Int -- ^ frames to next bug
     ,   bug         :: Coordinates  -- ^ coordinates of a bug
     ,   eatenBugs   :: [Coordinates]
@@ -62,6 +62,12 @@ renderSegment (Seg Tip (x, y)) = pictures
     ]
 
 render :: GameState -> Picture
+render st@(GameState Lost _ _ _ _ _) = pictures (lostMsg : score : s)
+    where 
+        s       = map renderSegment (fst $ snake st)
+        lostMsg = translate (-300) 50 $ color (light red) $ text "You Lost"
+        score   = scale 0.4 0.4 $ translate (-500) (-100) $ color red $ text $ "Final Score: " ++ points
+        points  = show $ ((snakeLen $ snake st) - (snakeLen $ initialSnake))
 render st = pictures (time : points : bug' : s)
     where
         (ss, _)  = snake st
@@ -122,9 +128,9 @@ moveThruWallIfNesesery snake
     | otherwise             = moveForward pixel snake
 
 update :: Float -> GameState -> GameState
-update _ st@(GameState _ _ Won _ _ _) = st 
-update _ st@(GameState _ _ Lost _ _ _) = st 
-update t st = st { snake     = snake'
+update _ st@(GameState Won _ _ _ _ _) = st 
+update _ st@(GameState Lost _ _ _ _ _) = st 
+update _ st = st { snake     = snake'
                  , toNextBug = time
                  , bug       = bug' 
                  , eatenBugs = eatenBugs'
