@@ -1,4 +1,4 @@
-module Snake(Segment(..),SegmentType(..), SnakeObject, initialSnake, moveForward, Direction(..), changeDir, grow) where
+module Snake(Segment(..),SegmentType(..), SnakeObject, initialSnake, moveForward, Direction(..), changeDir, grow,getHeadCoordinates,getTipCoordinates) where
 import Control.Monad.State
 
 
@@ -47,7 +47,13 @@ grow :: SnakeObject -> SnakeObject
 grow ((Seg Tip cs):ss, dir) = (Seg Tail cs : Seg Tip cs : ss, dir)
 grow (h:t, dir)             = let (s, _) = grow (t, dir)
                               in (h:s, dir)  
-    
+
+getHeadCoordinates :: SnakeObject -> (Float, Float)
+getHeadCoordinates (Seg _ c:_, _) = c   
+
+getTipCoordinates :: SnakeObject -> (Float, Float)
+getTipCoordinates (s, _) = let (Seg _ c) = last s
+                            in c
 
 initialSnake :: SnakeObject
 initialSnake = ([Seg Head (0, 0), Seg Tail ((-20), 0), Seg Tip ((-40), 0)], R)
