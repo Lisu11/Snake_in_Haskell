@@ -14,7 +14,6 @@ data GameState = GameState {
     ,   toNextBug   :: Int -- ^ frames to next bug
     ,   bug         :: Coordinates  -- ^ coordinates of a bug
     ,   eatenBugs   :: [Coordinates]
-    ,   stdGen      :: StdGen
     } 
 
 fps :: Int
@@ -49,7 +48,6 @@ initialState = GameState {
     ,   toNextBug   = timeToNextBug
     ,   bug         = (-100, 0)
     ,   eatenBugs   = []
-    ,   stdGen      = mkStdGen 0
     }
 
 renderSegment :: Segment -> Picture
@@ -64,7 +62,7 @@ renderSegment (Seg Tip (x, y)) = pictures
     ]
 
 render :: GameState -> Picture
-render st = pictures (p2 : p : time : points : bug' : s)
+render st = pictures (time : points : bug' : s)
     where
         (ss, _)  = snake st
         s        = map renderSegment ss
@@ -72,9 +70,8 @@ render st = pictures (p2 : p : time : points : bug' : s)
         bug'     = translate bx by $ color green $ circleSolid (pixel / 2)
         time     = scale 0.2 0.2 $ translate 4500 2500 $ color yellow $ text $ show  (toNextBug st)
         points   = scale 0.25 0.25 $ translate (-3700) 2000 $ color red $ text $ show $ 
-                    ((length $ fst $ snake st) - (length $ fst $ initialSnake))
-        p = color red $ text $ show (bug st)
-        p2= translate 0 (-100) $ color green $ text $ show $ getHeadCoordinates $ snake st
+                    ((snakeLen $ snake st) - (snakeLen $ initialSnake))
+
          
 
 handleEvent :: Event -> GameState -> GameState
@@ -125,13 +122,13 @@ moveThruWallIfNesesery snake
     | otherwise             = moveForward pixel snake
 
 update :: Float -> GameState -> GameState
-update _ st@(GameState _ _ Won _ _ _ _) = st 
-update _ st@(GameState _ _ Lost _ _ _ _) = st 
-update _ st = st { snake     = snake'
+update _ st@(GameState _ _ Won _ _ _) = st 
+update _ st@(GameState _ _ Lost _ _ _) = st 
+update t st = st { snake     = snake'
                  , toNextBug = time
                  , bug       = bug' 
                  , eatenBugs = eatenBugs'
-                 , stdGen    = stdGen'
+                 , status    = status'
                  }
         where
             -- | bug got thru entire snake?
@@ -142,24 +139,32 @@ update _ st = st { snake     = snake'
             -- | new bug was eaten?
             eaten  = bugEaten (bug st) (snake st)
             eatenBugs' = if eaten then eatenBugs'' ++ [bug st] else eatenBugs''
-            (time, bug', stdGen') = 
+            (time, bug') = 
                 if toNextBug st == 0 || eaten
-                then let (s, x, y) = genRandomPosition $ stdGen st
-                     in (timeToNextBug, (x, y), s)
-                else (toNextBug st - 1, bug st, stdGen st)
+                then let s1 = snakeLen snake'
+                         s2 = floor $ fst $ getHeadCoordinates snake'
+                         s3 = floor $ snd $ getHeadCoordinates snake'
+                         s4 = toNextBug st
+                         seed =  s1 * s4 + s2 - s3 
+                     in(timeToNextBug, genRandomPosition $ mkStdGen seed)
+            else (toNextBug st - 1, bug st)
+                    
+                            
+            
+            -- | maybe you have lost?
+            status' = if checkCollisionWithItself $ snake' then Lost else Playing
 
 
-genRandomPosition :: StdGen -> (StdGen, Float, Float)
-genRandomPosition gen = 
-    let 
-        (x, s') = randomR ((-width / 2), width / 2) gen
-        (y, s ) = randomR ((-height / 2), height / 2) s'
+
+genRandomPosition :: StdGen -> (Float, Float)
+genRandomPosition gen = (roundX, roundY)
+    where 
+        (x, s) = randomR ((-width / 2), width / 2) gen
+        (y, _) = randomR ((-height / 2), height / 2) s
         roundX  = fromIntegral $ toTen (floor x) 
         roundY  = fromIntegral $ toTen (floor y) 
         toTen :: Int -> Int
         toTen v = v - (rem v 20)
-    
-    in (s, roundX, roundY)
 
 main :: IO ()
 main = play window bgColor fps initialState render handleEvent update

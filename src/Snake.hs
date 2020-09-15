@@ -1,4 +1,4 @@
-module Snake(Segment(..),SegmentType(..), SnakeObject, initialSnake, moveForward, Direction(..), changeDir, grow,getHeadCoordinates,getTipCoordinates) where
+module Snake(Segment(..),SegmentType(..), SnakeObject, initialSnake, moveForward, Direction(..), changeDir, grow,getHeadCoordinates,getTipCoordinates, checkCollisionWithItself, snakeLen) where
 import Control.Monad.State
 
 
@@ -10,6 +10,8 @@ data SegmentType = Head | Tail | Tip
 
 data Segment = Seg SegmentType (Float,  Float) 
 
+instance Eq Segment where
+    (Seg _ c1) == (Seg _ c2) = c1 == c2
 
 moveForward :: Float -> SnakeObject -> SnakeObject
 moveForward d snake@(Seg _ (x, y) :_, R) = 
@@ -54,6 +56,12 @@ getHeadCoordinates (Seg _ c:_, _) = c
 getTipCoordinates :: SnakeObject -> (Float, Float)
 getTipCoordinates (s, _) = let (Seg _ c) = last s
                             in c
+
+checkCollisionWithItself :: SnakeObject -> Bool
+checkCollisionWithItself (h:t, _) = not $ all (h /=) t
+    
+snakeLen :: SnakeObject -> Int
+snakeLen = length . fst
 
 initialSnake :: SnakeObject
 initialSnake = ([Seg Head (0, 0), Seg Tail ((-20), 0), Seg Tip ((-40), 0)], R)
